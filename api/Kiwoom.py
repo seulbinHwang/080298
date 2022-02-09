@@ -4,17 +4,32 @@ from PyQt5.QtCore import *
 import time
 import pandas as pd
 from util.const import *
-
+"""
+- PyQt
+    - Kiwoom API 는 ActiveX Control인 OCX 방식으로 API 연결을 제공
+    - 우리도 OCX 방식으로 API를 이용해야 함
+        - OCX
+            - OLE(Object Linking and Embedding) 을 제어할 수 있는 controller
+            - 응용 프로그램끼리 데이터를 공유하고 제어할 수 있도록 개발한 기술
+"""
 
 class Kiwoom(QAxWidget):
     def __init__(self):
+        """
+        - QAxWidget
+            - open API 를 사용할 수 있도록 연결
+        """
         super().__init__()
+        # 우리 컴퓨터에서 키움 API 를 사용할 수 있도록 설정
         self._make_kiwoom_instance()
+        # API로 보내는 요청들을 받아올 slot을 등록하는 함수
         self._set_signal_slots()
+        # 로그인 요청 보내기
         self._comm_connect()
-
+        # 내 계좌 번호 받아오기 -> self.account_number
         self.account_number = self.get_account_number()
 
+        # tr 요청에 대한 응답 대기를 위한 변수
         self.tr_event_loop = QEventLoop()
 
         self.order = {}
@@ -22,14 +37,33 @@ class Kiwoom(QAxWidget):
         self.universe_realtime_transaction_info = {}
 
     def _make_kiwoom_instance(self):
+        """
+        - Objectives
+            - 우리 컴퓨터에서 키움 API 를 사용할 수 있도록 설정
+            - 로그인 / 주식 부분 /  TR 요청
+
+        - setControl
+            - PyQt5.QAxContainer.py 안 QAxWidget 클래스 내부 메서드
+
+        - "KHOPENAPI.KHOpenAPICtrl.1"
+            - 키움증권 웹 사이트에 접속하여 Open API를 설치하면 우리 컴퓨터에 설치되는 API 식별자 (프로그램 ID / ProgID)
+            - Open API를 설치한 컴퓨터라면 레지스트리에 모두 동일한 이름으로 저장
+        """
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
 
     def _set_signal_slots(self):
-        """API로 보내는 요청들을 받아올 slot을 등록하는 함수"""
+        """
+        - Objectives
+            - API로 보내는 요청들을 받아올 slot을 등록하는 함수
+        - 로그인
+            - OnEventConnect.connect
+                - 로그인 응답 처리를 받을 때 사용하는 slot 함수는 _login_slot 이다.
+
+        """
         # 로그인 응답의 결과를 _on_login_connect을 통해 받도록 설정
         self.OnEventConnect.connect(self._login_slot)
 
-        # TR의 응답 결과를 _on_receive_tr_data를 통해 받도록 설정
+        # TR의 응답 결과를 _on_receive_tr_data 함수를 통해 받도록 설정
         self.OnReceiveTrData.connect(self._on_receive_tr_data)
 
         # TR/주문 메시지를 _on_receive_msg을 통해 받도록 설정
@@ -50,35 +84,89 @@ class Kiwoom(QAxWidget):
         self.login_event_loop.exit()
 
     def _comm_connect(self):
+        """
+        - Objectives
+            - 로그인 요청 신호를 보낸 이후, 응답 대기를 설정하는 함수
+
+            - dynamicCall
+                - PyQt5.QAxContainer.py 안 QAxWidget 클래스 내부 메서드
+                - API 서버로 로그인 요청을 보냄
+                - "CommConnect()"
+                    - API 에서 제공하는 함수
+                    - 키움증권 로그인 화면을 팝업하는 기능
+        """
         self.dynamicCall("CommConnect()")
 
+        # 동기화 처리를 위함 (로그인 될 때까지 기다리기)
         self.login_event_loop = QEventLoop()
         self.login_event_loop.exec_()
 
     def get_account_number(self, tag="ACCNO"):
+        """
+        - dynamicCall
+            - PyQt5.QAxContainer.py 안 QAxWidget 클래스 내부 메서드
+            - API 서버로 요청을 보냄
+            - "GetLoginInfo(QString)"
+                - 키움증권 로그인에 성공한 사용자 정보를 얻어 오는 API 함수
+            - tag
+                - "ACCNO" : 구분자 ; 로 연결된 보유 계좌 목록을 반환
+                    - 국내 해외 주식 / 선물/ 옵션 등의 계좌번호가 저장될 수 있음
+                - "USER_ID" / "USER_NAME"
+                - "GetServerGubun" : 1: 모의 투자, 나머지: 실거래 서버
+                - "KEY_BSECGB" : 키보드 보안 해지 여부 (0: 정상, 1: 해지)
+                - "FIREW_SECGB" : 방화벽 설정 여부 반환 (0: 미설정 / 1: 설정 / 2: 해지)
+        """
         account_list = self.dynamicCall("GetLoginInfo(QString)", tag)  # tag로 전달한 요청에 대한 응답을 받아옴
-        account_number = account_list.split(';')[0]
+        account_number = account_list.split(';')[0] # TODO: 국내 가상 계좌만 있다고 가장한 코드
         print(account_number, account_list)
         return account_number
 
     def get_code_list_by_market(self, market_type):
+        """
+        Objectives
+            - 특정 market의 code list를 받는다.
+        # TODO: market_type 을 바꿔가며 전략을 만들자.
+        Parameter: market_type("_")
+            - 0: 코스피
+            - 10: 코스닥
+            - 3: ELW
+            - 8: ETF
+            - 50: KONEX
+            - 4: 뮤츄얼 펀드
+            - 5: 신주인수권
+            - 6: 리츠
+            - 9: 하이얼펀드
+            - 30: K-OTC
+        """
         code_list = self.dynamicCall("GetCodeListByMarket(QString)", market_type)
         code_list = code_list.split(';')[:-1]
         return code_list
 
     def get_master_code_name(self, code):
+        """
+        Objectives
+            - 특정 code의 종목명을 받는다.
+        """
         code_name = self.dynamicCall("GetMasterCodeName(QString)", code)
         return code_name
 
     def get_price_data(self, code):
+        """
+        Objectives
+            - 종목의 상장일부터 가장 최근 일자까지 일봉 정보를 가져오는 함수
+            - TODO: "기준 일자" 를 이용하여, 주식 상장일 ~ 기준 일자 의 데이터를 받아올 수도 있다.
+        """
         self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
         self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
         self.dynamicCall("CommRqData(QString, QString, int, QString)", "opt10081_req", "opt10081", 0, "0001")
 
+        # TR 요청을 보낸 후, 응답 대기 상태로 만드는 코드 (이 아래 코드는 TR에 대한 응답이 도착한 후 실행될 수 있다.)
         self.tr_event_loop.exec_()
 
+        # 한 번에 호출로 받아 올 수 있는 데이터의 최대 개수 600개치가 ohlcv에 저장됨
         ohlcv = self.tr_data
 
+        # 여러 번 호출된 데이터를 합칩니다.
         while self.has_next_tr_data:
             self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
             self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
@@ -86,15 +174,29 @@ class Kiwoom(QAxWidget):
             self.tr_event_loop.exec_()
 
             for key, val in self.tr_data.items():
-                ohlcv[key] += val
-
+                ohlcv[key] += val # ohlcv[key][-1:] = val
+        """
+        DataFrame
+            - 행과 열을 가진 자료 구조
+        """
         df = pd.DataFrame(ohlcv, columns=['open', 'high', 'low', 'close', 'volume'], index=ohlcv['date'])
 
-        return df[::-1]
+        return df[::-1] # 날짜 뒤집기
 
     def _on_receive_tr_data(self, screen_no, rqname, trcode, record_name, next, unused1, unused2, unused3, unused4):
-        "TR조회의 응답 결과를 얻어오는 함수"
+        """
+        Objectives
+            - TR조회의 응답 결과를 얻어오는 함수
+        Parameter
+            - screen_no: 화면 번호
+            - rqname: 사용자 구분 명
+            - trcode: TR 이름
+            - record_name: 레코드 이름 (안 씀)
+            - next: 연속 조회 유무를 판단하는 값 ( 0: 연속(추가 조회) 데이터 없음 / 2: 연속(추가 조회) 데이터 있음 )
+            - unused1, unused2, unused3, unused4
+        """
         print("[Kiwoom] _on_receive_tr_data is called {} / {} / {}".format(screen_no, rqname, trcode))
+        # 이번 요청에서 받아 온 데이터 개수(tr_data_cnt) 확인 요청
         tr_data_cnt = self.dynamicCall("GetRepeatCnt(QString, QString)", trcode, rqname)
 
         if next == '2':
@@ -211,8 +313,10 @@ class Kiwoom(QAxWidget):
                 }
 
             self.tr_data = self.balance
-
+        # 응답 대기 상태에서 해제 시켜주기
         self.tr_event_loop.exit()
+        # 키움 API 를 이용할 때, 1초에 최대 5회의 요청만 허용하는 정책 떄문
+        # 0.2초에 한번 데이터를 요청할 수 있지만, 여기서는 여유 있게 0.5초의 대기 시잔을 두었다.
         time.sleep(0.5)
 
     def get_deposit(self):

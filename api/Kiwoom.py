@@ -118,7 +118,8 @@ class Kiwoom(QAxWidget):
         """
         account_list = self.dynamicCall("GetLoginInfo(QString)", tag)  # tag로 전달한 요청에 대한 응답을 받아옴
         account_number = account_list.split(';')[0] # TODO: 국내 가상 계좌만 있다고 가장한 코드
-        print(account_number, account_list)
+        print('account_list:', account_list)
+        print('account_number:', account_number)
         return account_number
 
     def get_code_list_by_market(self, market_type):
@@ -150,14 +151,16 @@ class Kiwoom(QAxWidget):
         code_name = self.dynamicCall("GetMasterCodeName(QString)", code)
         return code_name
 
-    def get_price_data(self, code):
+    def get_price_data(self, code, date):
         """
         Objectives
             - 종목의 상장일부터 가장 최근 일자까지 일봉 정보를 가져오는 함수
             - TODO: "기준 일자" 를 이용하여, 주식 상장일 ~ 기준 일자 의 데이터를 받아올 수도 있다.
         """
         self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
+        self.dynamicCall("SetInputValue(QString, QString)", "기준일자", date)
         self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
+        # 사용자 구분 명 / TR 이름 / 연속 조회 여부 = 0 ( 600개만 딱 받아오기) / 화면 번호
         self.dynamicCall("CommRqData(QString, QString, int, QString)", "opt10081_req", "opt10081", 0, "0001")
 
         # TR 요청을 보낸 후, 응답 대기 상태로 만드는 코드 (이 아래 코드는 TR에 대한 응답이 도착한 후 실행될 수 있다.)
@@ -170,6 +173,7 @@ class Kiwoom(QAxWidget):
         while self.has_next_tr_data:
             self.dynamicCall("SetInputValue(QString, QString)", "종목코드", code)
             self.dynamicCall("SetInputValue(QString, QString)", "수정주가구분", "1")
+            # 사용자 구분 명 / TR 이름 / 연속 조회 여부 = 2 / 화면 번호
             self.dynamicCall("CommRqData(QString, QString, int, QString)", "opt10081_req", "opt10081", 2, "0001")
             self.tr_event_loop.exec_()
 
@@ -320,6 +324,10 @@ class Kiwoom(QAxWidget):
         time.sleep(0.5)
 
     def get_deposit(self):
+        """
+        Objectives
+            - 조회 대상 계좌의 예수금을 얻어오는 함수
+        """
         self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_number)
         self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
         self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")

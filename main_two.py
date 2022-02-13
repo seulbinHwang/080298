@@ -11,16 +11,19 @@ kiwoom = Kiwoom()
 
 
 # kospi code list/code_name 를 받겠다.
-kopsi_code_list = kiwoom.get_code_list_by_market("0") # list # "10": KOSDAQ
-print("kopsi_code_list:", kopsi_code_list)
-for code in kopsi_code_list:
-    code_name = kiwoom.get_master_code_name(code)
-    print('kospi_code:', code)
-    print('kospi_code_name:', code_name)
-
-
+get_kospi_code_list = False
+if get_kospi_code_list:
+    kopsi_code_list = kiwoom.get_code_list_by_market("0") # list # "10": KOSDAQ
+    print("kopsi_code_list:", kopsi_code_list)
+    for code in kopsi_code_list:
+        code_name = kiwoom.get_master_code_name(code)
+        print('kospi_code:', code, ' / kospi_code_name:', code_name)
+#
+#
 # 삼성전자(005930)의 일봉 정보를 출력하겠다.
-df = kiwoom.get_price_data("005930")
-print(df)
+get_samsung_price_data = True
+if get_samsung_price_data:
+    df = kiwoom.get_price_data(code="005930", date="20220211")
+    print(df)
 
 app.exec_()

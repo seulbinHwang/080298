@@ -26,4 +26,8 @@ if get_samsung_price_data:
     df = kiwoom.get_price_data(code="005930", date="20220211")
     print(df)
 
+get_deposit = True
+if get_deposit:
+    deposit = kiwoom.get_deposit()
+
 app.exec_()

@@ -207,7 +207,7 @@ class Kiwoom(QAxWidget):
             self.has_next_tr_data = True
         else:
             self.has_next_tr_data = False
-
+        # 특정 종목의 일봉 조회하기
         if rqname == "opt10081_req":
             ohlcv = {'date': [], 'open': [], 'high': [], 'low': [], 'close': [], 'volume': []}
 
@@ -227,11 +227,11 @@ class Kiwoom(QAxWidget):
                 ohlcv['volume'].append(int(volume))
 
             self.tr_data = ohlcv
-
+        # 예수금 불러오기
         elif rqname == "opw00001_req":
             deposit = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, 0, "주문가능금액")
             self.tr_data = int(deposit)
-            print(self.tr_data)
+            print('예수금:', self.tr_data)
 
         elif rqname == "opt10075_req":
             for i in range(tr_data_cnt):
@@ -330,9 +330,10 @@ class Kiwoom(QAxWidget):
         """
         self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", self.account_number)
         self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
-        self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")
+        self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2") # 2: 일반조회 / 3: 추정조회
+        # 사용자 구분 명 / TR 이름 / 연속 조회 여부 = 0 / 화면 번호
         self.dynamicCall("CommRqData(QString, QString, int, QString)", "opw00001_req", "opw00001", 0, "0002")
-
+        # 코드 응답을 대기
         self.tr_event_loop.exec_()
         return self.tr_data
 

@@ -338,6 +338,15 @@ class Kiwoom(QAxWidget):
         return self.tr_data
 
     def send_order(self, rqname, screen_no, order_type, code, order_quantity, order_price, order_classification, origin_order_number=""):
+        """
+        # rqname: send_buy_order: rqname
+        # screen_no: '1001' : 화면 번호
+        # order_type: 1: 신규 매수 주문 / 2: 신규 매도 주문 / 3: 매수 취소 / 4: 매도 취소 / 5: 매수 정정 / 6: 매도 정정
+        # code: '007000': 매수할 종목 코드
+        # order_quantity: 1: 주문 수량
+        # order_price: 35000: 주문 가격
+        # order_classification: '00' : 지정가 주문 방식
+        """
         order_result = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",[rqname, screen_no, self.account_number, order_type, code, order_quantity, order_price,order_classification, origin_order_number])
         return order_result
 

@@ -22,13 +22,12 @@ def execute_crawler():
         # 전체 페이지 개수를 가져오기 위한 코드
         res = requests.get(BASE_URL + str(CODES[0]))
         page_soup = BeautifulSoup(res.text, 'lxml')
-
         # '맨뒤'에 해당하는 태그를 기준으로 전체 페이지 개수 추출하기
         total_page_num = page_soup.select_one('td.pgRR > a')
         total_page_num = int(total_page_num.get('href').split('=')[-1])
 
         # 조회할 수 있는 항목정보들 추출
-        ipt_html = page_soup.select_one('div.subcnt_sise_item_top')
+        ipt_html = page_soup.select_one('div.subcnt_sise_item_top') # 조회할 수 있는 항목 이름들을 추출
 
         # 전역변수 fields에 항목들을 담아 다른 함수에서도 접근가능하도록 만듬
         global fields

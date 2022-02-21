@@ -27,7 +27,7 @@ if get_samsung_price_data:
     print(df)
 
 # 예수금을 확인하겠다.
-get_deposit = True
+get_deposit = False
 if get_deposit:
     deposit = kiwoom.get_deposit()
 
@@ -42,5 +42,6 @@ if get_deposit:
 send_order = True
 if send_order:
     order_result = kiwoom.send_order('send_buy_order', '1001', 1, '007700', 1, 35000, '00')
+    print('order_result:', order_result)
 
 app.exec_()

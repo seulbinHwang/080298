@@ -25,7 +25,12 @@ class RSIStrategy(QThread):
         self.init_strategy()
 
     def init_strategy(self):
-        """전략 초기화 기능을 수행하는 함수"""
+        """
+        - Objectives
+            - 전략 초기화 기능을 수행하는 함수
+                - 유니버스가 없으면 생성하고, 있으면 가져오기
+                - 잔고에는 어떤 종목들이 있는가?
+        """
         try:
             # 유니버스 조회, 없으면 생성
             self.check_and_get_universe()
@@ -33,10 +38,10 @@ class RSIStrategy(QThread):
             # 가격 정보를 조회, 필요하면 생성
             self.check_and_get_price_data()
 
-            # Kiwoom > 주문정보 확인
+            # Kiwoom > 주문정보 확인 (다음날 장 거래 전까지 유효) -> self.kiwoom.order 을 사용해서 접근할 수 있습니다.
             self.kiwoom.get_order()
 
-            # Kiwoom > 잔고 확인
+            # Kiwoom > 잔고 확인 -> self.kiwoom.balance 을 사용해서 접근 가능
             self.kiwoom.get_balance()
 
             # Kiwoom > 예수금 확인
@@ -55,9 +60,10 @@ class RSIStrategy(QThread):
     def check_and_get_universe(self):
         """유니버스가 존재하는지 확인하고 없으면 생성하는 함수"""
         if not check_table_exist(self.strategy_name, 'universe'):
+            # RSIStrategy db 내에 'universe' 테이블이 없으면
             universe_list = get_universe()
             print(universe_list)
-            universe = {}
+            universe = {} # {'code': code_name , ... }
             # 오늘 날짜를 20210101 형태로 지정
             now = datetime.now().strftime("%Y%m%d")
 
@@ -85,9 +91,10 @@ class RSIStrategy(QThread):
             # universe라는 테이블명으로 Dataframe을 DB에 저장함
             insert_df_to_db(self.strategy_name, 'universe', universe_df)
 
+        # universe 테이블에서 모든 것을 select 하자.
         sql = "select * from universe"
         cur = execute_sql(self.strategy_name, sql)
-        universe_list = cur.fetchall()
+        universe_list = cur.fetchall() # fetchall: select 문의 결과 객체를 이용하여, 조회 결과 확인 가능
         for item in universe_list:
             idx, code, code_name, created_at = item
             self.universe[code] = {
@@ -111,6 +118,8 @@ class RSIStrategy(QThread):
                 # (2)케이스: 장이 종료된 경우 API를 이용해 얻어온 데이터를 저장
                 if check_transaction_closed():
                     # 저장된 데이터의 가장 최근 일자를 조회
+                    ## index가 가장 큰 데이터를 가져오는데, 어떻게 현재 날짜랑 비교하지?
+                        ## 정답은: get_price_data에서 얻어온 데이터를 데이터베이스에 저장할 때, index에 날짜를 저장하기 때문
                     sql = "select max(`{}`) from `{}`".format('index', code)
 
                     cur = execute_sql(self.strategy_name, sql)
@@ -131,7 +140,7 @@ class RSIStrategy(QThread):
                 else:
                     sql = "select * from `{}`".format(code)
                     cur = execute_sql(self.strategy_name, sql)
-                    cols = [column[0] for column in cur.description]
+                    cols = [column[0] for column in cur.description] # ['index' , 'open', 'high', 'low', 'close', 'volume']
 
                     # 데이터베이스에서 조회한 데이터를 DataFrame으로 변환해서 저장
                     price_df = pd.DataFrame.from_records(data=cur.fetchall(), columns=cols)
@@ -145,11 +154,13 @@ class RSIStrategy(QThread):
             try:
                 # (0)장중인지 확인
                 if not check_transaction_open():
+                    # TODO: 8시 59분에 돌리면 9시 4분까지 코드가 멈추므로, 9시부터 9시 4분까지 매매 기회를 놓치게 된다. 수정하고 싶으면 하자.
                     print("장시간이 아니므로 5분간 대기합니다.")
                     time.sleep(5 * 60)
                     continue
 
                 for idx, code in enumerate(self.universe.keys()):
+                    # 종목 명과 전체 유니버스 중 몇 번째인지 나타내는 코드
                     print('[{}/{}_{}]'.format(idx + 1, len(self.universe), self.universe[code]['code_name']))
                     time.sleep(0.5)
 
@@ -182,6 +193,7 @@ class RSIStrategy(QThread):
     def set_universe_real_time(self):
         """유니버스 실시간 체결정보 수신 등록하는 함수"""
         # 임의의 fid를 하나 전달하기 위한 코드(아무 값의 fid라도 하나 이상 전달해야 정보를 얻어올 수 있음)
+        # '체결 시간'만 전달해도, 다른 값들 전부 받아올 수 있습니다.
         fids = get_fid("체결시간")
 
         # 장운영구분을 확인하고 싶으면 사용할 코드
@@ -193,12 +205,12 @@ class RSIStrategy(QThread):
         # 종목코드들을 ';'을 기준으로 묶어주는 작업
         codes = ";".join(map(str, codes))
 
-        # 화면번호 9999에 종목코드들의 실시간 체결정보 수신을 요청
+        # 화면번호 9999에 종목코드들의 실시간 체결정보 수신을 요청 -> self.kiwoom.universe_realtime_transaction_info 에 저장
         self.kiwoom.set_real_reg("9999", codes, fids, "0")
 
     def check_sell_signal(self, code):
         """매도대상인지 확인하는 함수"""
-        universe_item = self.universe[code]
+        universe_item = self.universe[code] # universe_item 는 딕셔너리이며, 'code_name' 과 'price_df' 라는 키를 가짐
 
         # (1)현재 체결정보가 존재하지 않는지 확인
         if code not in self.kiwoom.universe_realtime_transaction_info.keys():
@@ -212,12 +224,11 @@ class RSIStrategy(QThread):
         low = self.kiwoom.universe_realtime_transaction_info[code]['저가']
         close = self.kiwoom.universe_realtime_transaction_info[code]['현재가']
         volume = self.kiwoom.universe_realtime_transaction_info[code]['누적거래량']
-
-        # 오늘 가격 데이터를 과거 가격 데이터(DataFrame)의 행으로 추가하기 위해 리스트로 만듦
-        today_price_data = [open, high, low, close, volume]
-
         df = universe_item['price_df'].copy()
 
+        # 옿늘 가격 데이터 추가!
+        # 오늘 가격 데이터를 과거 가격 데이터(DataFrame)의 행으로 추가하기 위해 리스트로 만듦
+        today_price_data = [open, high, low, close, volume]
         # 과거 가격 데이터에 금일 날짜로 데이터 추가
         df.loc[datetime.now().strftime('%Y%m%d')] = today_price_data
 
@@ -261,11 +272,9 @@ class RSIStrategy(QThread):
 
     def check_buy_signal_and_order(self, code):
         """매수 대상인지 확인하고 주문을 접수하는 함수"""
-        # 매수 가능 시간 확인
+        # 매수 가능 시간 확인 -> 매수는 15시가 넘은 장 종료 시점부터 하려고 의도
         if not check_adjacent_transaction_closed():
             return False
-
-        universe_item = self.universe[code]
 
         # (1)현재 체결정보가 존재하지 않는지 확인
         if code not in self.kiwoom.universe_realtime_transaction_info.keys():
@@ -283,6 +292,7 @@ class RSIStrategy(QThread):
         # 오늘 가격 데이터를 과거 가격 데이터(DataFrame)의 행으로 추가하기 위해 리스트로 만듦
         today_price_data = [open, high, low, close, volume]
 
+        universe_item = self.universe[code]
         df = universe_item['price_df'].copy()
 
         # 과거 가격 데이터에 금일 날짜로 데이터 추가
@@ -361,7 +371,7 @@ class RSIStrategy(QThread):
             return
 
     def get_balance_count(self):
-        """매도 주문이 접수되지 않은 보유 종목 수를 계산하는 함수"""
+        """ 매도 주문이 접수되지 않은 보유 종목 수를 계산하는 함수"""
         balance_count = len(self.kiwoom.balance)
         # kiwoom balance에 존재하는 종목이 매도 주문 접수되었다면 보유 종목에서 제외시킴
         for code in self.kiwoom.order.keys():

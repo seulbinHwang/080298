@@ -18,7 +18,6 @@ def execute_crawler():
 
     # CODES에 담긴 KOSPI, KOSDAQ 종목 모두를 크롤링하기 위해 for문을 사용
     for code in CODES:
-
         # 전체 페이지 개수를 가져오기 위한 코드
         res = requests.get(BASE_URL + str(CODES[0]))
         page_soup = BeautifulSoup(res.text, 'lxml')
@@ -28,7 +27,6 @@ def execute_crawler():
 
         # 조회할 수 있는 항목정보들 추출
         ipt_html = page_soup.select_one('div.subcnt_sise_item_top') # 조회할 수 있는 항목 이름들을 추출
-
         # 전역변수 fields에 항목들을 담아 다른 함수에서도 접근가능하도록 만듬
         global fields
         fields = [item.get('value') for item in ipt_html.select('input')]
@@ -56,10 +54,14 @@ def execute_crawler():
 
 
 def crawler(code, page):
+    """
+    code: KOSPI, KOSDAQ 종목을 하나로 합치는데 사용할 변수
+    page: 몇 page의 정보를 crawling 할 것인가?
+    """
 
     global fields
 
-    # Naver finance에 전달할 값들 세팅(요청을 보낼 때는 menu, fieldIds, returnUrl을 지정해서 보내야 함)
+    # Naver finance에 전달할 값들 세팅(요청을 보낼 때는 menu, fieldIds, returnUrl 을 지정해서 보내야 함)
     data = {'menu': 'market_sum',
             'fieldIds': fields,
             'returnUrl': BASE_URL + str(code) + "&page=" + str(page)}
@@ -72,7 +74,7 @@ def crawler(code, page):
     # 크롤링할 table의 html 가져오는 코드(크롤링 대상 요소의 클래스는 브라우저에서 확인)
     table_html = page_soup.select_one('div.box_type_l')
 
-    # column명을 가공
+    # column명을 가공 (ROE, PER , PBR 등등)
     header_data = [item.get_text().strip() for item in table_html.select('thead th')][1:-1]
 
     # 종목명 + 수치 추출 (a.title = 종목명, td.number = 기타 수치)
@@ -82,11 +84,9 @@ def crawler(code, page):
                                                                           (x.name == 'td' and
                                                                            'number' in x.get('class', []))
                                                                           )]
-
+    number_data = np.array(inner_data)
     # page마다 있는 종목의 순번 가져오기
     no_data = [item.get_text().strip() for item in table_html.select('td.no')]
-    number_data = np.array(inner_data)
-
     # 가로 x 세로 크기에 맞게 행렬화
     number_data.resize(len(no_data), len(header_data))
 
@@ -97,28 +97,26 @@ def crawler(code, page):
 
 def get_universe():
     # 크롤링 결과를 얻어옴
-    df = execute_crawler()
+    df = execute_crawler() # return 값 형태는 pandas dataframe
 
     mapping = {',': '', 'N/A': '0'}
     df.replace(mapping, regex=True, inplace=True)
-
     # 사용할 column들 설정
     cols = ['거래량', '매출액', '매출액증가율', 'ROE', 'PER']
-
     # column들을 숫자타입으로 변환(Naver Finance를 크롤링해온 데이터는 str 형태)
     df[cols] = df[cols].astype(float)
 
     # 유니버스 구성 조건 (1)~(4)를 만족하는 데이터 가져오기
     df = df[(df['거래량'] > 0) & (df['매출액'] > 0) & (df['매출액증가율'] > 0) & (df['ROE'] > 0) & (df['PER'] > 0) & (~df.종목명.str.contains("지주")) & (~df.종목명.str.contains("홀딩스"))]
 
+
     # PER의 역수
     df['1/PER'] = 1 / df['PER']
+    # 1/PER의 순위 계산
+    df['RANK_1/PER'] = df['1/PER'].rank(method='max', ascending=False)
 
     # ROE의 순위 계산
     df['RANK_ROE'] = df['ROE'].rank(method='max', ascending=False)
-
-    # 1/PER의 순위 계산
-    df['RANK_1/PER'] = df['1/PER'].rank(method='max', ascending=False)
 
     # ROE 순위, 1/PER 순위 합산한 랭킹
     df['RANK_VALUE'] = (df['RANK_ROE'] + df['RANK_1/PER']) / 2

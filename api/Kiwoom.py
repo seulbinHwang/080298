@@ -240,6 +240,7 @@ class Kiwoom(QAxWidget):
             print('예수금:', self.tr_data)
 
         # 오늘 주문 정보 불러오기 (다음 장 거래 시작일 전까지 유효)
+        # get_order
         elif rqname == "opt10075_req":
             for i in range(tr_data_cnt): # tr_data_cnt: 데이터 개수
                 code = self.dynamicCall("GetCommData(QString, QString, int, QString", trcode, rqname, i, "종목코드")
@@ -369,7 +370,7 @@ class Kiwoom(QAxWidget):
             - OnReceiveTrData: 주문 응답
                 - 주문 발생 시 첫번째 서버 응답
             - OnReceiveMsg: 주문 메시지 수신
-            - OnReceiveChejan: 주문 접수/체결
+            - OnReceiveChejanData: 주문 접수/체결
             - OnReceiveTrData
         """
         order_result = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString, QString)",[rqname, screen_no, self.account_number, order_type, code, order_quantity, order_price,order_classification, origin_order_number])
@@ -433,6 +434,7 @@ class Kiwoom(QAxWidget):
                     # order 딕셔너리에 데이터 저장
                     # {'007700': {주문가: '~~', '주문 번호': '~~' , 주문 상태: '~~', 미체결 수량" '~~'}, ...}
                     self.order[code].update({item_name: data})
+                # 잔고이동이면 self.balance에 값을 저장
                 elif int(s_gubun) == 1:
                     # 아직 balance에 종목코드가 없다면 신규 생성하는 과정
                     if code not in self.balance.keys():
@@ -481,7 +483,7 @@ class Kiwoom(QAxWidget):
         """
         Parameter
             - 장운영 구분할 때
-                - "1000": 화면 번호 / "": 특정 종목에 대한 정보를 얻는 것이 아니므로 / get_fid("장운영구분") / 0: 최초등록, 1: 최초등록이 아님 (실시간 등록 타입)
+                - "1000": 화면 번호 / "": 특정 종목에 대한 정보를 얻는 것이 아니므로 / get_fid("장운영구분") / 0: 최초등록, 1: 최초등록이 아님
                     - 화면 번호
                         - TR 요청에서 사용한 것처럼, 자유롭게 새로 번호를 받아 사용할 수 있음.
                     - 실시간 등록 타입
@@ -499,7 +501,7 @@ class Kiwoom(QAxWidget):
     def _on_receive_real_data(self, s_code, real_type, real_data):
         """
         # 실시간 체결 데이터를 _on_receive_real_data을 통해 받도록 설정
-            # SetRealReg() 함수로 등록한 실시간 데이터도 이 이벤트로 전달됩니다.
+            # SetRealReg() # set_real_reg 함수로 등록한 실시간 데이터도 이 이벤트로 전달됩니다.
             # GetCommRealData() 함수를 사용해서 수신된 데이터를 얻을 수 있습니다.
         """
         if real_type == "장시작시간":

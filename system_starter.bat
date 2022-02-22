@@ -3,7 +3,7 @@
 :init
 @echo Started: %date% %time%
 echo init starts
-cd C:\Users\82103\PycharmProjects\SystemTrading
+cd C:\Users\080298
 call activate system_trading_py38_32
 @taskkill /f /im "python.exe"
 set loop=0

@@ -2,7 +2,6 @@ import requests
 
 TARGET_URL = 'https://notify-api.line.me/api/notify'
 
-
 def send_message(message, token=None):
     """LINE Notify를 사용한 메세지 보내기"""
     try:
